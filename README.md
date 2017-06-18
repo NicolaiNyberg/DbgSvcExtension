@@ -1,4 +1,4 @@
-# DbgSvcExtension
+# DbgSvc Extension
 Helper methods for configuring Windows DbgSvc (DebugDiag) and examples of tricky exceptions / errors.
 
 ## DebugDiag2
@@ -9,7 +9,7 @@ It is not without merits as this product was initially used to aid developers de
 
 Some of these examples and the extension work on top of DebugDiag2.
 
-## Feature: configure DbgSvc given process name
+## Feature: configure DbgSvc given a process name
 DbgSvc is the NT Service that normally is configured thorugh DebugDiag2 Collector. It outputs dump (.dmp) files that can later be inspected using Visual Studio, WinDbg, or DebugDiag's own Analyzer.
 
 Collector works on running processes or service. In my case, I needed to be able to configure it using command-line and be able to deploy its files (config/state xml-files, trigger/handler vbs-files) without invoking the Collector. Hence the need for the DbgSvcExtension.
@@ -80,11 +80,11 @@ The objective is to obtain a foot-print of the memory and in particular the stac
 
 A number of strategies spring to mind:
 - Attach a debugger (this is what DebugDiag2 does)
-- Structured Exception Handling (SEH)
+- Windows API SetUnhandledExceptionFilter function
 - Windows Error Reporting (WER), outside the scope of this article
 
-### SEH (Structured Exception Handling) Soex.Cseh example 
-The Visual C run-time has support for ```SetUnhandledExceptionFilter``` that allows you to specify a "filter" method for handling exceptions. In practice, the actual filter will create a .dmp-file and terminate the process. The ```Soex.Cseh``` example project illustrates just that.
+### SetUnhandledExceptionFilter Soex.Cseh example 
+Windows has support for ```SetUnhandledExceptionFilter()``` that allows you to specify a "filter" method for handling exceptions. In practice, the actual filter will create a .dmp-file and terminate the process. The ```Soex.Cseh``` example project illustrates just that.
 
 The .dmp-file can be opened in Visual Studio and after ensuring symbols (.pdb-files) are loaded correctly, one can resume/continue debugging and it will take you to your line of source and it becomes obvious what is the matter by looking at the callstack window. Using this approach to obtain a .dmp-file, I am struggling to get the nice pretty callstack in WinDbg or DebugDiag's Analyzer, so your milage may vary.
 
@@ -101,7 +101,7 @@ On my Windows Server 2012 R2 with DebugDiag2 installed, all I have to do is doub
 
 But at a cost. Having a debugger attached is not free in terms of CPU-cycles, although I have yet to see a gross performance hit in my application. More on this later.
 
-The ideal solution would be to have a C-program that sets-up SEH that produces rich .dmp-files like the DbgSvc, and then loads the CLR and your .Net application. In that way, you would get the nice .dmp-files without the overhead of having a debugger attached. I am not there, yet.
+The ideal solution would be to have a C-program that sets-up an unhandled exception filter that produces rich .dmp-files like the DbgSvc, and then loads the CLR and your .Net application. In that way, you would get the nice .dmp-files without the overhead of having a debugger attached. I am not there, yet.
 
 ### Using WinDbg to find the recursive (chain of) functions
 - Start WinDbg
