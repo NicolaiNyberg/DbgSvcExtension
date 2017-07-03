@@ -1,18 +1,11 @@
 # DbgSvc Extension
-Helper methods for configuring Windows DbgSvc (DebugDiag) and examples of tricky exceptions / errors.
+Description of the Windows DbgSvc (DebugDiag) and examples of tricky exceptions / errors. Includes a crude, albeit effective CrashHandler, that ensures memory dumps are created in case of an unhandled exception.
 
 ## DebugDiag2
 Microsoft has provided a very scriptable debugger, DebugDiag2, which allows you to create dump files under certain circumstances that you can script:
 https://www.microsoft.com/en-us/download/details.aspx?id=49924
 
 It is not without merits as this product was initially used to aid developers debug IIS applications.
-
-Some of these examples and the extension work on top of DebugDiag2.
-
-## Feature: configure DbgSvc given a process name
-DbgSvc is the NT Service that normally is configured thorugh DebugDiag2 Collector. It outputs dump (.dmp) files that can later be inspected using Visual Studio, WinDbg, or DebugDiag's own Analyzer.
-
-Collector works on running processes or service. In my case, I needed to be able to configure it using command-line and be able to deploy its files (config/state xml-files, trigger/handler vbs-files) without invoking the Collector. Hence the need for the DbgSvcExtension.
 
 ## Dump files
 Dump files can be very tiny containing bare bare minimum to spanding the entire process, all its memory, handles, threads including thread local storage etc. Search MSDN on MiniDump for further reference.
@@ -79,16 +72,16 @@ When catching these hard exceptions, despite all your effort such as using FailF
 The objective is to obtain a foot-print of the memory and in particular the stack -- so we need a dump-file / snapshot of the process at the time of the exception.
 
 A number of strategies spring to mind:
-- Attach a debugger (this is what DebugDiag2 does)
 - Windows API SetUnhandledExceptionFilter / AddVectoredExceptionHandler functions
+- Attach a debugger (this is what DebugDiag2 does)
 - Windows Error Reporting (WER), outside the scope of this article
 
-### SetUnhandledExceptionFilter / AddVectoredExceptionHandler example 
+### CrashHandler: SetUnhandledExceptionFilter / AddVectoredExceptionHandler example 
 Windows has support for ```SetUnhandledExceptionFilter()``` and  ```AddVectoredExceptionHandler()``` that allow you to specify a "filter" method for handling exceptions. In practice, the actual filter will create a .dmp-file and terminate the process. Configuring these for instance using the CrashHandler dll provided here, illustrate just that. I have included examples of how to configure the CrashHandler from C programs, C# programs, and even hosting the CLR itself.
 
 The .dmp-file can be opened in Visual Studio and after ensuring symbols (.pdb-files) are loaded correctly, one can resume/continue debugging and it will take you to your line of source and it becomes obvious what is the matter by looking at the callstack window.
 
-A note on using the CrashHandler from the .Net environment and expect to catch StackOverflows is that it fails to create a MiniDump only for StackOverflow-exceptions. The file gets created, but the ensuing call to ```MiniDumpWriteDump()``` fails. I am at a loss right now why this behavior occurs.
+The trick to get beautiful dumps is to create a thread before hand, ```DumpThread``` which waits for an event to become signalled, e.g. the ```dumpEvent```. This event will only get signalled from the ExceptionHandler. This ensures that the thread responsible for calling the ```MiniDumpWriteDump``` will have a fully working stack.
 
 ### DebugDiag2 attached debugger
 Great credit goes to Mike Smith for his article on this specific topic: http://www.mikesmithdev.com/blog/debug-stack-overflow-exception/ Essentially, you:
@@ -106,21 +99,28 @@ But at a cost. Having a debugger attached is not free in terms of CPU-cycles, al
 The ideal solution would be to have a C-program that sets-up an unhandled exception filter that produces rich .dmp-files like the DbgSvc, and then loads the CLR and your .Net application. In that way, you would get the nice .dmp-files without the overhead of having a debugger attached. I am not there, yet.
 
 ### Using WinDbg to find the recursive (chain of) functions
-- Start WinDbg
-- Open the dump-file (Ctrl+D). You should see something like this in the command window
-- ```...```
-- ```User Mini Dump File with Full Memory: Only application data is available```
-- ```...```
-- ```This dump file has an exception of interest stored in it.```
-- ```The stored exception information can be accessed via .ecxr.```
-- ```(f00.92c): Stack overflow - code c00000fd (first/second chance not available)```
-- In the command window type the following two lines (to load Son-of-Strike and CLR debugger extensions)
-- ```.loadby sos clr```
-- ```!CLRStack```
-- And voilá:
-- ```000000064d1563c0 00007ffcc5da04e9 TestSo.Cer.Program.TriggerSo()```
-- ```...```
-- ```000000064d54e840 00007ffcc5da04e9 TestSo.Cer.Program.TriggerSo()```
-- ```000000064d54ec80 00007ffcc5da04e9 TestSo.Cer.Program.TriggerSo()```
-- ```000000064d54f0c0 00007ffcc5da0493 TestSo.Cer.Program.Main(System.String[])```
-- ```000000064d54f320 00007ffd25414073 [GCFrame: 000000064d54f320] ```
+Start WinDbg
+
+Open the dump-file (Ctrl+D). You should see something like this in the command window
+```...
+User Mini Dump File with Full Memory: Only application data is available
+...
+This dump file has an exception of interest stored in it.
+The stored exception information can be accessed via .ecxr.
+(f00.92c): Stack overflow - code c00000fd (first/second chance not available)
+```
+
+In the command window type the following two lines (to load Son-of-Strike and CLR debugger extensions)
+```
+.loadby sos clr
+!CLRStack
+```
+And voilá:
+```
+00000064d1563c0 00007ffcc5da04e9 TestSo.Cer.Program.TriggerSo()
+...
+000000064d54e840 00007ffcc5da04e9 TestSo.Cer.Program.TriggerSo()
+000000064d54ec80 00007ffcc5da04e9 TestSo.Cer.Program.TriggerSo()
+000000064d54f0c0 00007ffcc5da0493 TestSo.Cer.Program.Main(System.String[])
+000000064d54f320 00007ffd25414073 [GCFrame: 000000064d54f320]
+```

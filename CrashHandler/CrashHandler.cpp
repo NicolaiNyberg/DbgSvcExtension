@@ -1,6 +1,3 @@
-// CrashHandler.cpp : Defines the exported functions for the DLL application.
-//
-
 #include <windows.h>
 #include <dbghelp.h>
 #include "CrashHandler.h"
@@ -25,16 +22,41 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 
 WCHAR g_fileName[MAX_PATH + 1];
 LPTOP_LEVEL_EXCEPTION_FILTER g_prevFilter;
-bool g_isDotNet;
+bool g_failInVectoredHandler;
 HANDLE g_hProcess;
 DWORD g_processId;
+HANDLE g_dumpEvent;
+HANDLE g_dumpThread;
+DWORD g_dumpThreadId;
+MINIDUMP_EXCEPTION_INFORMATION g_mei;
 
 LONG WINAPI ExceptionHandler(_In_ struct _EXCEPTION_POINTERS *ep)
 {
-	MINIDUMP_EXCEPTION_INFORMATION mei;
-	mei.ThreadId = GetCurrentThreadId();
-	mei.ExceptionPointers = ep;
-	mei.ClientPointers = FALSE;
+	g_mei.ThreadId = GetCurrentThreadId();
+	g_mei.ExceptionPointers = ep;
+	g_mei.ClientPointers = FALSE;
+	SetEvent(g_dumpEvent);
+	WaitForSingleObject(g_dumpThread, INFINITE);
+	TerminateProcess(g_hProcess, 1);
+	return EXCEPTION_EXECUTE_HANDLER;
+}
+
+LONG WINAPI VectoredExceptionHandler(_In_ struct _EXCEPTION_POINTERS *ep)
+{
+	auto ec = ep->ExceptionRecord->ExceptionCode;
+	if (g_failInVectoredHandler && (ec==EXCEPTION_STACK_OVERFLOW ||ec==EXCEPTION_ACCESS_VIOLATION))
+		return ExceptionHandler(ep);
+	return EXCEPTION_CONTINUE_SEARCH;
+}
+
+HANDLE CreateManualResetEvent(LPCWSTR name, BOOL initialState)
+{
+	return CreateEvent(nullptr, TRUE, initialState, name);
+}
+
+DWORD WINAPI DumpThread(LPVOID param)
+{
+	WaitForSingleObject(g_dumpEvent, INFINITE);
 
 	auto hFile = CreateFile(
 		g_fileName,
@@ -47,48 +69,37 @@ LONG WINAPI ExceptionHandler(_In_ struct _EXCEPTION_POINTERS *ep)
 	if (hFile == INVALID_HANDLE_VALUE)
 		EXCEPTION_CONTINUE_SEARCH;
 
-	DWORD dumpType = MiniDumpNormal;
-	if (ep->ExceptionRecord->ExceptionCode != EXCEPTION_STACK_OVERFLOW)
-	{
-		dumpType = MiniDumpWithFullMemory
-			| MiniDumpWithHandleData
-			| MiniDumpWithThreadInfo
-			| MiniDumpWithProcessThreadData
-			| MiniDumpWithFullMemoryInfo
-			| MiniDumpWithUnloadedModules
-			| MiniDumpWithFullAuxiliaryState
-			| MiniDumpIgnoreInaccessibleMemory
-			| MiniDumpWithTokenInformation;
-	}
+	DWORD dumpType = MiniDumpWithFullMemory
+		| MiniDumpWithHandleData
+		| MiniDumpWithThreadInfo
+		| MiniDumpWithProcessThreadData
+		| MiniDumpWithFullMemoryInfo
+		| MiniDumpWithUnloadedModules
+		| MiniDumpWithFullAuxiliaryState
+		| MiniDumpIgnoreInaccessibleMemory
+		| MiniDumpWithTokenInformation;
 
 	MiniDumpWriteDump(
 		g_hProcess,
 		g_processId,
 		hFile,
 		(MINIDUMP_TYPE)dumpType,
-		&mei,
+		&g_mei,
 		nullptr,
 		nullptr);
-
 	CloseHandle(hFile);
-	TerminateProcess(GetCurrentProcess(), 1);
-	return EXCEPTION_EXECUTE_HANDLER;
+	return 0;
 }
 
-LONG WINAPI VectoredExceptionHandler(_In_ struct _EXCEPTION_POINTERS *ep)
-{
-	if (g_isDotNet)
-		return ExceptionHandler(ep);
-	return EXCEPTION_CONTINUE_SEARCH;
-}
-
-CRASHHANDLER_API void ConfigureUnhandledExceptionHandler(LPCWSTR dumpFileName, bool isDotNet)
+CRASHHANDLER_API void ConfigureUnhandledExceptionHandler(LPCWSTR dumpFileName, bool failInVectoredHandler)
 {
 	memset(g_fileName, 0, sizeof(WCHAR)*(MAX_PATH + 1));
 	wcsncpy_s(g_fileName, dumpFileName, MAX_PATH);
-	g_isDotNet = isDotNet;
+	g_failInVectoredHandler = failInVectoredHandler;
 	g_hProcess = GetCurrentProcess();
 	g_processId = GetCurrentProcessId();
+	g_dumpEvent = CreateManualResetEvent(L"dumpEvent", FALSE);
+	g_dumpThread = CreateThread(nullptr, 0, DumpThread, nullptr, 0, &g_dumpThreadId);
 	SetErrorMode(SEM_NOGPFAULTERRORBOX);
 	AddVectoredExceptionHandler(1, VectoredExceptionHandler);
 	g_prevFilter = SetUnhandledExceptionFilter(ExceptionHandler);
