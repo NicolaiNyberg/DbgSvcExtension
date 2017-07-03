@@ -237,3 +237,6 @@ packages/
 
 # no need for .state files
 *.state
+
+# no need for .dmp (mini-dump files)
+*.dmp

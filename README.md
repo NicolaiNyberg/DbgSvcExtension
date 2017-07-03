@@ -80,13 +80,15 @@ The objective is to obtain a foot-print of the memory and in particular the stac
 
 A number of strategies spring to mind:
 - Attach a debugger (this is what DebugDiag2 does)
-- Windows API SetUnhandledExceptionFilter function
+- Windows API SetUnhandledExceptionFilter / AddVectoredExceptionHandler functions
 - Windows Error Reporting (WER), outside the scope of this article
 
-### SetUnhandledExceptionFilter Soex.Cseh example 
-Windows has support for ```SetUnhandledExceptionFilter()``` that allows you to specify a "filter" method for handling exceptions. In practice, the actual filter will create a .dmp-file and terminate the process. The ```Soex.Cseh``` example project illustrates just that.
+### SetUnhandledExceptionFilter / AddVectoredExceptionHandler example 
+Windows has support for ```SetUnhandledExceptionFilter()``` and  ```AddVectoredExceptionHandler()``` that allow you to specify a "filter" method for handling exceptions. In practice, the actual filter will create a .dmp-file and terminate the process. Configuring these for instance using the CrashHandler dll provided here, illustrate just that. I have included examples of how to configure the CrashHandler from C programs, C# programs, and even hosting the CLR itself.
 
-The .dmp-file can be opened in Visual Studio and after ensuring symbols (.pdb-files) are loaded correctly, one can resume/continue debugging and it will take you to your line of source and it becomes obvious what is the matter by looking at the callstack window. Using this approach to obtain a .dmp-file, I am struggling to get the nice pretty callstack in WinDbg or DebugDiag's Analyzer, so your milage may vary.
+The .dmp-file can be opened in Visual Studio and after ensuring symbols (.pdb-files) are loaded correctly, one can resume/continue debugging and it will take you to your line of source and it becomes obvious what is the matter by looking at the callstack window.
+
+A note on using the CrashHandler from the .Net environment and expect to catch StackOverflows is that it fails to create a MiniDump only for StackOverflow-exceptions. The file gets created, but the ensuing call to ```MiniDumpWriteDump()``` fails. I am at a loss right now why this behavior occurs.
 
 ### DebugDiag2 attached debugger
 Great credit goes to Mike Smith for his article on this specific topic: http://www.mikesmithdev.com/blog/debug-stack-overflow-exception/ Essentially, you:
@@ -108,14 +110,13 @@ The ideal solution would be to have a C-program that sets-up an unhandled except
 - Open the dump-file (Ctrl+D). You should see something like this in the command window
 - ```...```
 - ```User Mini Dump File with Full Memory: Only application data is available```
-- ```Comment: 'Dump created by DbgHost. First Chance Stack Overflow'```
 - ```...```
 - ```This dump file has an exception of interest stored in it.```
 - ```The stored exception information can be accessed via .ecxr.```
 - ```(f00.92c): Stack overflow - code c00000fd (first/second chance not available)```
 - In the command window type the following two lines (to load Son-of-Strike and CLR debugger extensions)
 - ```.loadby sos clr```
-- ```.CLRStack```
+- ```!CLRStack```
 - And voilá:
 - ```000000064d1563c0 00007ffcc5da04e9 TestSo.Cer.Program.TriggerSo()```
 - ```...```
