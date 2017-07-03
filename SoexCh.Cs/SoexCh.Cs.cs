@@ -34,14 +34,26 @@ namespace SoexCh.Cs
         {
             var dumpName = Process.GetCurrentProcess().ProcessName + ".dmp";
             ConfigureUnhandledExceptionHandler(dumpName, true);
-            if (args.Length>0)
-                AccessViolation();
-            else
-                TriggerSo();
+            if (args.Length > 0)
+            {
+                switch (args[0])
+                {
+                    case "av":
+                        AccessViolation();
+                        break;
+                    case "so":
+                        TriggerSo();
+                        break;
+                }                
+            }
+            RemoveExceptionHandlers();
         }
 
         [DllImport("CrashHandler.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
         static extern void ConfigureUnhandledExceptionHandler(string dumpFileName, bool isDotNet);
+
+        [DllImport("CrashHandler.dll", CallingConvention = CallingConvention.Cdecl)]
+        static extern void RemoveExceptionHandlers();
 
     }
 }

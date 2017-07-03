@@ -11,5 +11,6 @@
 #endif
 
 extern "C" {
-	CRASHHANDLER_API void ConfigureUnhandledExceptionHandler(LPCWSTR dumpFileName, bool isDotNet);
+	CRASHHANDLER_API void ConfigureUnhandledExceptionHandler(LPCWSTR dumpFileName, bool failInVectoredHandler);
+	CRASHHANDLER_API void RemoveExceptionHandlers();
 }

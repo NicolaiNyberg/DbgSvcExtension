@@ -28,7 +28,9 @@ DWORD g_processId;
 HANDLE g_dumpEvent;
 HANDLE g_dumpThread;
 DWORD g_dumpThreadId;
+volatile bool g_nothingToDo = false;
 MINIDUMP_EXCEPTION_INFORMATION g_mei;
+HANDLE g_vectoredHandlerHandle;
 
 LONG WINAPI ExceptionHandler(_In_ struct _EXCEPTION_POINTERS *ep)
 {
@@ -57,6 +59,8 @@ HANDLE CreateManualResetEvent(LPCWSTR name, BOOL initialState)
 DWORD WINAPI DumpThread(LPVOID param)
 {
 	WaitForSingleObject(g_dumpEvent, INFINITE);
+	if (g_nothingToDo)
+		return 0;
 
 	auto hFile = CreateFile(
 		g_fileName,
@@ -101,6 +105,15 @@ CRASHHANDLER_API void ConfigureUnhandledExceptionHandler(LPCWSTR dumpFileName, b
 	g_dumpEvent = CreateManualResetEvent(L"dumpEvent", FALSE);
 	g_dumpThread = CreateThread(nullptr, 0, DumpThread, nullptr, 0, &g_dumpThreadId);
 	SetErrorMode(SEM_NOGPFAULTERRORBOX);
-	AddVectoredExceptionHandler(1, VectoredExceptionHandler);
+	g_vectoredHandlerHandle = AddVectoredExceptionHandler(1, VectoredExceptionHandler);
 	g_prevFilter = SetUnhandledExceptionFilter(ExceptionHandler);
+}
+
+CRASHHANDLER_API void RemoveExceptionHandlers()
+{
+	RemoveVectoredExceptionHandler(g_vectoredHandlerHandle);
+	SetUnhandledExceptionFilter(g_prevFilter);
+	g_nothingToDo = true;
+	SetEvent(g_dumpEvent);
+	WaitForSingleObject(g_dumpThread, INFINITE);
 }
