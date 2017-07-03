@@ -20,6 +20,16 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 	return TRUE;
 }
 
+const DWORD DefaultDumpType = MiniDumpWithFullMemory
+							| MiniDumpWithHandleData
+							| MiniDumpWithThreadInfo
+							| MiniDumpWithProcessThreadData
+							| MiniDumpWithFullMemoryInfo
+							| MiniDumpWithUnloadedModules
+							| MiniDumpWithFullAuxiliaryState
+							| MiniDumpIgnoreInaccessibleMemory
+							| MiniDumpWithTokenInformation;
+
 WCHAR g_fileName[MAX_PATH + 1];
 LPTOP_LEVEL_EXCEPTION_FILTER g_prevFilter;
 bool g_failInVectoredHandler;
@@ -31,6 +41,8 @@ DWORD g_dumpThreadId;
 volatile bool g_nothingToDo = false;
 MINIDUMP_EXCEPTION_INFORMATION g_mei;
 HANDLE g_vectoredHandlerHandle;
+pfnExceptionCallback g_exceptionCallback;
+DWORD g_dumpType;
 
 LONG WINAPI ExceptionHandler(_In_ struct _EXCEPTION_POINTERS *ep)
 {
@@ -71,31 +83,26 @@ DWORD WINAPI DumpThread(LPVOID param)
 		FILE_ATTRIBUTE_NORMAL,
 		nullptr);
 	if (hFile == INVALID_HANDLE_VALUE)
-		EXCEPTION_CONTINUE_SEARCH;
+		return 0;
 
-	DWORD dumpType = MiniDumpWithFullMemory
-		| MiniDumpWithHandleData
-		| MiniDumpWithThreadInfo
-		| MiniDumpWithProcessThreadData
-		| MiniDumpWithFullMemoryInfo
-		| MiniDumpWithUnloadedModules
-		| MiniDumpWithFullAuxiliaryState
-		| MiniDumpIgnoreInaccessibleMemory
-		| MiniDumpWithTokenInformation;
+	auto exceptionCode = g_mei.ExceptionPointers->ExceptionRecord->ExceptionCode;
 
 	MiniDumpWriteDump(
 		g_hProcess,
 		g_processId,
 		hFile,
-		(MINIDUMP_TYPE)dumpType,
+		(MINIDUMP_TYPE)g_dumpType,
 		&g_mei,
 		nullptr,
 		nullptr);
 	CloseHandle(hFile);
+
+	if (g_exceptionCallback != nullptr)
+		g_exceptionCallback(exceptionCode);
 	return 0;
 }
 
-CRASHHANDLER_API void ConfigureUnhandledExceptionHandler(LPCWSTR dumpFileName, bool failInVectoredHandler)
+CRASHHANDLER_API void ConfigureUnhandledExceptionHandler(LPCWSTR dumpFileName, DWORD dumpType, bool failInVectoredHandler, pfnExceptionCallback exceptionCallback)
 {
 	memset(g_fileName, 0, sizeof(WCHAR)*(MAX_PATH + 1));
 	wcsncpy_s(g_fileName, dumpFileName, MAX_PATH);
@@ -104,7 +111,9 @@ CRASHHANDLER_API void ConfigureUnhandledExceptionHandler(LPCWSTR dumpFileName, b
 	g_processId = GetCurrentProcessId();
 	g_dumpEvent = CreateManualResetEvent(L"dumpEvent", FALSE);
 	g_dumpThread = CreateThread(nullptr, 0, DumpThread, nullptr, 0, &g_dumpThreadId);
+	g_dumpType = dumpType == 0xffffffff ? DefaultDumpType : dumpType;
 	SetErrorMode(SEM_NOGPFAULTERRORBOX);
+	g_exceptionCallback = exceptionCallback;
 	g_vectoredHandlerHandle = AddVectoredExceptionHandler(1, VectoredExceptionHandler);
 	g_prevFilter = SetUnhandledExceptionFilter(ExceptionHandler);
 }
@@ -116,4 +125,5 @@ CRASHHANDLER_API void RemoveExceptionHandlers()
 	g_nothingToDo = true;
 	SetEvent(g_dumpEvent);
 	WaitForSingleObject(g_dumpThread, INFINITE);
+	g_exceptionCallback = nullptr;
 }

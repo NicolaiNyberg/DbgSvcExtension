@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 
 namespace SoexCh.Cs
@@ -29,11 +30,10 @@ namespace SoexCh.Cs
             }
         }
 
-
         static void Main(string[] args)
         {
             var dumpName = Process.GetCurrentProcess().ProcessName + ".dmp";
-            ConfigureUnhandledExceptionHandler(dumpName, true);
+            ConfigureUnhandledExceptionHandler(dumpName, 0xffffffff, true, OnException);
             if (args.Length > 0)
             {
                 switch (args[0])
@@ -46,13 +46,38 @@ namespace SoexCh.Cs
                         break;
                 }                
             }
+            ThrowOneExceptionAndCatchIt();
             RemoveExceptionHandlers();
         }
 
-        [DllImport("CrashHandler.dll", CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
-        static extern void ConfigureUnhandledExceptionHandler(string dumpFileName, bool isDotNet);
+        static void ThrowOneExceptionAndCatchIt()
+        {
+            try
+            {
+                throw new Exception("sample exception");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Caught .Net exception: {ex.Message}");
+            }
+        }
 
-        [DllImport("CrashHandler.dll", CallingConvention = CallingConvention.Cdecl)]
+
+
+        static void OnException(uint code)
+        {
+            Console.WriteLine($"Handled exception: 0x{code:X8}");
+        }
+
+        const string CrashHandlerDll = "CrashHandler.dll";
+
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        delegate void ExceptionCallback(uint exceptionCode);
+
+        [DllImport(CrashHandlerDll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+        static extern void ConfigureUnhandledExceptionHandler(string dumpFileName, uint dumpType, bool failInVectoredHandler, ExceptionCallback exceptionCallback);
+
+        [DllImport(CrashHandlerDll, CallingConvention = CallingConvention.Cdecl)]
         static extern void RemoveExceptionHandlers();
 
     }

@@ -28,9 +28,14 @@ void AccessViolation()
 	*p = 1;
 }
 
+void OnException(DWORD code)
+{
+	printf("Handled exception: %x", code);
+}
+
 int main()
 {
-	ConfigureUnhandledExceptionHandler(L"SoexCh.C.exe.dmp", false);
+	ConfigureUnhandledExceptionHandler(L"SoexCh.C.exe.dmp", 0xffffffff, false, OnException);
 	AccessViolation();
 	//StackOverflow();
     return 0;

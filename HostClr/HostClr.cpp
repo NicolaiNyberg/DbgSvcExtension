@@ -2,6 +2,7 @@
 #include <metahost.h>
 #pragma comment(lib, "mscoree.lib")
 #include "..\CrashHandler\CrashHandler.h"
+#include <cstdio>
 
 struct Context
 {
@@ -91,6 +92,11 @@ HRESULT ExecuteInDefaultAppDomain(
 	return c->host->ExecuteInDefaultAppDomain(assembly, typeName, methodName, arguments, &ret );
 }
 
+void OnException(DWORD code)
+{
+	printf("Handled exception: %x", code);
+}
+
 int main(WCHAR** args, int argc)
 {
 	{
@@ -103,7 +109,7 @@ int main(WCHAR** args, int argc)
 		hr = SetDefaultFlags(&c); 
 		if (!hr) hr = GetHost(&c);
 		if (!hr) hr = StartRuntime(&c);
-		ConfigureUnhandledExceptionHandler(L"HostClr.dmp", true);
+		ConfigureUnhandledExceptionHandler(L"HostClr.dmp", 0xffffffff, true, OnException);
 		//if (!hr) hr = ExecuteInDefaultAppDomain(&c, L"HwCs.exe", L"HwCs.Program", L"MainWrapper", L"is this working");
 		if (!hr) hr = ExecuteInDefaultAppDomain(&c, L"Soex.Csharp.exe", L"Soex.Csharp.Program", L"MainWrapper", L"");
 	}

@@ -10,7 +10,22 @@
 #define CRASHHANDLER_API __declspec(dllimport)
 #endif
 
+typedef void (*pfnExceptionCallback)(DWORD exceoptionCode);
+
 extern "C" {
-	CRASHHANDLER_API void ConfigureUnhandledExceptionHandler(LPCWSTR dumpFileName, bool failInVectoredHandler);
+	CRASHHANDLER_API void ConfigureUnhandledExceptionHandler(LPCWSTR dumpFileName, DWORD dumpType, bool failInVectoredHandler, pfnExceptionCallback exceptionCallback);
 	CRASHHANDLER_API void RemoveExceptionHandlers();
 }
+
+/* Usage from C#
+const string CrashHandlerDll = "CrashHandler.dll";
+
+[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+delegate void ExceptionCallback(uint exceptionCode);
+
+[DllImport(CrashHandlerDll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
+static extern void ConfigureUnhandledExceptionHandler(string dumpFileName, uint dumpType, bool failInVectoredHandler, ExceptionCallback exceptionCallback);
+
+[DllImport(CrashHandlerDll, CallingConvention = CallingConvention.Cdecl)]
+static extern void RemoveExceptionHandlers();
+*/
