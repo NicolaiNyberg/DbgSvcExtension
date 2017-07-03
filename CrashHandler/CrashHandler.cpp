@@ -79,16 +79,7 @@ LONG WINAPI VectoredExceptionHandler(_In_ struct _EXCEPTION_POINTERS *ep)
 {
 	if (g_isDotNet)
 		return ExceptionHandler(ep);
-	auto ec = ep->ExceptionRecord->ExceptionCode;
-	switch (ec)
-	{
-	case EXCEPTION_STACK_OVERFLOW:
-	case EXCEPTION_ACCESS_VIOLATION:
-		ExceptionHandler(ep);
-		return EXCEPTION_CONTINUE_SEARCH;
-	default:
-		return EXCEPTION_CONTINUE_SEARCH;
-	}
+	return EXCEPTION_CONTINUE_SEARCH;
 }
 
 CRASHHANDLER_API void ConfigureUnhandledExceptionHandler(LPCWSTR dumpFileName, bool isDotNet)
