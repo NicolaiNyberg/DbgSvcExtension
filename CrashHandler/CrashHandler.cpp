@@ -58,7 +58,7 @@ LONG WINAPI ExceptionHandler(_In_ struct _EXCEPTION_POINTERS *ep)
 LONG WINAPI VectoredExceptionHandler(_In_ struct _EXCEPTION_POINTERS *ep)
 {
 	auto ec = ep->ExceptionRecord->ExceptionCode;
-	if (g_failInVectoredHandler && (ec==EXCEPTION_STACK_OVERFLOW ||ec==EXCEPTION_ACCESS_VIOLATION))
+	if (g_failInVectoredHandler && (ec==EXCEPTION_STACK_OVERFLOW || ec==EXCEPTION_ACCESS_VIOLATION))
 		return ExceptionHandler(ep);
 	return EXCEPTION_CONTINUE_SEARCH;
 }
@@ -125,5 +125,7 @@ CRASHHANDLER_API void RemoveExceptionHandlers()
 	g_nothingToDo = true;
 	SetEvent(g_dumpEvent);
 	WaitForSingleObject(g_dumpThread, INFINITE);
+	CloseHandle(g_dumpThread);
+	CloseHandle(g_dumpEvent);
 	g_exceptionCallback = nullptr;
 }
