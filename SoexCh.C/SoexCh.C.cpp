@@ -35,7 +35,7 @@ void OnException(DWORD code)
 
 int main()
 {
-	ConfigureUnhandledExceptionHandler(L"SoexCh.C.exe.dmp", 0xffffffff, false, OnException);
+	ConfigureUnhandledExceptionHandler(L"SoexCh.C.exe.dmp", 0xffffffff, true, OnException);
 	AccessViolation();
 	//StackOverflow();
     return 0;

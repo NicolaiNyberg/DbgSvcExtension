@@ -1,6 +1,7 @@
 #include <windows.h>
 #include <dbghelp.h>
 #include "CrashHandler.h"
+#include <cstdio>
 
 #pragma comment ( lib, "dbghelp.lib" )
 
@@ -32,7 +33,7 @@ const DWORD DefaultDumpType = MiniDumpWithFullMemory
 
 WCHAR g_fileName[MAX_PATH + 1];
 LPTOP_LEVEL_EXCEPTION_FILTER g_prevFilter;
-bool g_failInVectoredHandler;
+bool g_outputToConsole;
 HANDLE g_hProcess;
 DWORD g_processId;
 HANDLE g_dumpEvent;
@@ -58,7 +59,7 @@ LONG WINAPI ExceptionHandler(_In_ struct _EXCEPTION_POINTERS *ep)
 LONG WINAPI VectoredExceptionHandler(_In_ struct _EXCEPTION_POINTERS *ep)
 {
 	auto ec = ep->ExceptionRecord->ExceptionCode;
-	if (g_failInVectoredHandler && (ec==EXCEPTION_STACK_OVERFLOW || ec==EXCEPTION_ACCESS_VIOLATION))
+	if (ec==EXCEPTION_STACK_OVERFLOW || ec==EXCEPTION_ACCESS_VIOLATION)
 		return ExceptionHandler(ep);
 	return EXCEPTION_CONTINUE_SEARCH;
 }
@@ -97,31 +98,32 @@ DWORD WINAPI DumpThread(LPVOID param)
 		nullptr);
 	CloseHandle(hFile);
 
+	if (g_outputToConsole)
+		wprintf(L"Handled exception: 0x%8X. Mini-dump saved to %s\r\n", exceptionCode, g_fileName);
+
 	if (g_exceptionCallback != nullptr)
 		g_exceptionCallback(exceptionCode);
 	return 0;
 }
 
-CRASHHANDLER_API void ConfigureUnhandledExceptionHandler(LPCWSTR dumpFileName, DWORD dumpType, bool failInVectoredHandler, pfnExceptionCallback exceptionCallback)
+CRASHHANDLER_API void ConfigureUnhandledExceptionHandler(LPCWSTR dumpFileName, DWORD dumpType, bool outputToConsole, pfnExceptionCallback exceptionCallback)
 {
 	memset(g_fileName, 0, sizeof(WCHAR)*(MAX_PATH + 1));
 	wcsncpy_s(g_fileName, dumpFileName, MAX_PATH);
-	g_failInVectoredHandler = failInVectoredHandler;
+	g_outputToConsole = outputToConsole;
 	g_hProcess = GetCurrentProcess();
 	g_processId = GetCurrentProcessId();
-	g_dumpEvent = CreateManualResetEvent(L"dumpEvent", FALSE);
+	g_dumpEvent = CreateManualResetEvent(L"CrashHandler.dumpEvent", FALSE);
 	g_dumpThread = CreateThread(nullptr, 0, DumpThread, nullptr, 0, &g_dumpThreadId);
 	g_dumpType = dumpType == 0xffffffff ? DefaultDumpType : dumpType;
 	SetErrorMode(SEM_NOGPFAULTERRORBOX);
 	g_exceptionCallback = exceptionCallback;
 	g_vectoredHandlerHandle = AddVectoredExceptionHandler(1, VectoredExceptionHandler);
-	g_prevFilter = SetUnhandledExceptionFilter(ExceptionHandler);
 }
 
 CRASHHANDLER_API void RemoveExceptionHandlers()
 {
 	RemoveVectoredExceptionHandler(g_vectoredHandlerHandle);
-	SetUnhandledExceptionFilter(g_prevFilter);
 	g_nothingToDo = true;
 	SetEvent(g_dumpEvent);
 	WaitForSingleObject(g_dumpThread, INFINITE);

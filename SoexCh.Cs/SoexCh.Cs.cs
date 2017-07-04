@@ -33,7 +33,7 @@ namespace SoexCh.Cs
         static void Main(string[] args)
         {
             var dumpName = Process.GetCurrentProcess().ProcessName + ".dmp";
-            ConfigureUnhandledExceptionHandler(dumpName, 0xffffffff, true, OnException);
+            ConfigureUnhandledExceptionHandler(dumpName);
             if (args.Length > 0)
             {
                 switch (args[0])
@@ -62,20 +62,17 @@ namespace SoexCh.Cs
             }
         }
 
-
-
-        static void OnException(uint code)
-        {
-            Console.WriteLine($"Handled exception: 0x{code:X8}");
-        }
-
         const string CrashHandlerDll = "CrashHandler.dll";
 
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         delegate void ExceptionCallback(uint exceptionCode);
 
         [DllImport(CrashHandlerDll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
-        static extern void ConfigureUnhandledExceptionHandler(string dumpFileName, uint dumpType, bool failInVectoredHandler, ExceptionCallback exceptionCallback);
+        static extern void ConfigureUnhandledExceptionHandler(
+            string dumpFileName,
+            uint dumpType = 0xffffffff,
+            bool outputToConsole = true,
+            ExceptionCallback exceptionCallback = null);
 
         [DllImport(CrashHandlerDll, CallingConvention = CallingConvention.Cdecl)]
         static extern void RemoveExceptionHandlers();

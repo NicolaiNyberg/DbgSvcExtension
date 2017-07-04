@@ -8,7 +8,7 @@ https://www.microsoft.com/en-us/download/details.aspx?id=49924
 It is not without merits as this product was initially used to aid developers debug IIS applications.
 
 ## Dump files
-Dump files can be very tiny containing bare bare minimum to spanding the entire process, all its memory, handles, threads including thread local storage etc. Search MSDN on MiniDump for further reference.
+Dump files can be very tiny containing bare minimum to spanding the entire process, all its memory, handles, threads including thread local storage etc. Search MSDN on MiniDump for further reference.
 
 ### Importance of .pdb-files
 It cannot be stressed enough the importance of having .pdb files at your disposal; in particular if your code-base reaches outside of the .Net realm. So why not deploy them together with your binaries; it will give so much nicer stack-traces in your logs.
@@ -76,8 +76,8 @@ A number of strategies spring to mind:
 - Attach a debugger (this is what DebugDiag2 does)
 - Windows Error Reporting (WER), outside the scope of this article
 
-### CrashHandler: SetUnhandledExceptionFilter / AddVectoredExceptionHandler example 
-Windows has support for ```SetUnhandledExceptionFilter()``` and  ```AddVectoredExceptionHandler()``` that allow you to specify a "filter" method for handling exceptions. In practice, the actual filter will create a .dmp-file and terminate the process. Configuring these for instance using the CrashHandler dll provided here, illustrate just that. I have included examples of how to configure the CrashHandler from C programs, C# programs, and even hosting the CLR itself.
+### CrashHandler: AddVectoredExceptionHandler example 
+Windows has support for ```SetUnhandledExceptionFilter()``` and  ```AddVectoredExceptionHandler()``` that allow you to specify a "filter" method for handling exceptions. CrashHandler uses the latter by configurering a filter that creates a .dmp-file and terminates the process. I have included examples of how to call the CrashHandler from C programs, C# programs, and even hosting the CLR itself.
 
 The .dmp-file can be opened in Visual Studio and after ensuring symbols (.pdb-files) are loaded correctly, one can resume/continue debugging and it will take you to your line of source and it becomes obvious what is the matter by looking at the callstack window.
 
@@ -95,8 +95,6 @@ This seems a whole lot better than installing remote debugging tools, or the Vis
 On my Windows Server 2012 R2 with DebugDiag2 installed, all I have to do is double-click on the .dmp-file to "Analyze Crash/Hang Issue" and Explorer will invoke DebugDiag2's Analyzer which will process the .dmp-file and produce a nice .mht-file that opens in a browser and _voilá_ it points you to the stack-trace with the offending method. Cannot be easier.
 
 But at a cost. Having a debugger attached is not free in terms of CPU-cycles, although I have yet to see a gross performance hit in my application. More on this later.
-
-The ideal solution would be to have a C-program that sets-up an unhandled exception filter that produces rich .dmp-files like the DbgSvc, and then loads the CLR and your .Net application. In that way, you would get the nice .dmp-files without the overhead of having a debugger attached. I am not there, yet.
 
 ### Using WinDbg to find the recursive (chain of) functions
 Start WinDbg

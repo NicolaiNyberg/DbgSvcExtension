@@ -13,7 +13,7 @@
 typedef void (*pfnExceptionCallback)(DWORD exceoptionCode);
 
 extern "C" {
-	CRASHHANDLER_API void ConfigureUnhandledExceptionHandler(LPCWSTR dumpFileName, DWORD dumpType, bool failInVectoredHandler, pfnExceptionCallback exceptionCallback);
+	CRASHHANDLER_API void ConfigureUnhandledExceptionHandler(LPCWSTR dumpFileName, DWORD dumpType, bool outputToConsole, pfnExceptionCallback exceptionCallback);
 	CRASHHANDLER_API void RemoveExceptionHandlers();
 }
 
@@ -24,7 +24,11 @@ const string CrashHandlerDll = "CrashHandler.dll";
 delegate void ExceptionCallback(uint exceptionCode);
 
 [DllImport(CrashHandlerDll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
-static extern void ConfigureUnhandledExceptionHandler(string dumpFileName, uint dumpType, bool failInVectoredHandler, ExceptionCallback exceptionCallback);
+static extern void ConfigureUnhandledExceptionHandler(
+	string dumpFileName,
+	uint dumpType = 0xffffffff,
+	bool outputToConsole = true,
+	ExceptionCallback exceptionCallback = null);
 
 [DllImport(CrashHandlerDll, CallingConvention = CallingConvention.Cdecl)]
 static extern void RemoveExceptionHandlers();
